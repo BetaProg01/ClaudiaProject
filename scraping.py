@@ -1,3 +1,4 @@
+from collections import Counter
 import requests
 from bs4 import BeautifulSoup
 
@@ -35,16 +36,18 @@ def get_page_reduced_with_keywords(url: str, keyword: str):
         "changeSet": "REVIEW_LIST",
         "puid": "7b3f2595-c29f-4ebb-88fc-324122094744"
     }
-    session = requests.Session()
     try:
-        response = session.post(url, headers=headers, data=data, timeout=5)
+        response = requests.post(url, headers=headers, data=data, timeout=10)
         response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
         return response.text
     except requests.exceptions.RequestException as e:
         print(f"Request error: {str(e)}")
         return None
     
-def get_review_ids(html):
+def get_review_ids(html, existing_ids):
+    if not html:
+        return []
+
     soup = BeautifulSoup(html, 'html.parser')
     review_containers = soup.find_all('div', class_='reviewSelector')
     review_ids = []
@@ -52,11 +55,10 @@ def get_review_ids(html):
         review_id = container.get('data-reviewid')
         if review_id is None:
             print(f'Missing data-reviewid: {container}')
-        else:
+        elif review_id not in existing_ids:
             review_ids.append(review_id)
     return review_ids
 
-import requests
 
 def get_all_reviews_page(ids):
     url = "https://www.tripadvisor.com/OverlayWidgetAjax?Mode=EXPANDED_HOTEL_REVIEWS_RESP&metaReferer="
@@ -84,14 +86,17 @@ def get_all_reviews_page(ids):
     data = {
         "reviews": ",".join(ids)
     }
-    session = requests.Session()
-    response = session.post(url, headers=headers, data=data)
+    response = requests.post(url, headers=headers, data=data)
     
     return response.text
 
 def extract_review_text(html):
     soup = BeautifulSoup(html, 'html.parser')
-    review_elements = soup.find_all('p', class_='partial_entry')
+
+    # Find p elements that are not descendants of unwanted div elements
+    review_elements = [p for p in soup.find_all('p', class_='partial_entry') 
+                       if not any('mgrRspnInline' in parent.get('class', []) for parent in p.parents)]
+
     reviews = []
     for element in review_elements:
         review_text = element.text
@@ -110,32 +115,53 @@ def get_first_review_test():
     print(f"HTML : {full_reviews}")
     reviews = extract_review_text(full_reviews)
     print(reviews[0])
+    
+def count_bad_words():
+    
+    bad_words = ['Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Organic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Organic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Farm-to-table', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Local', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Green', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Whole foods', 'Farm-to-table', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Unprocessed', 'Nutrient-rich', 'Holistic', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Whole foods', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Green', 'Organic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Green', 'Organic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Green', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Whole foods', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Organic', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Green', 'Organic', 'Natural', 'GMO', 'Genetically', 'genetics', 'Chemical', 'Pesticide', 'Pest', 'Herbicide', 'Herb', 'Synthetic', 'Non-synthetic', 'Eco-friendly', 'Green farming', 'Clean farming', 'Environmentally', 'Earth-friendly', 'Sustainable', 'Eco-conscious', 'Health-conscious', 'toxic', 'additives', 'farming', 'eco-sensitive', 'Ecological', 'Chemical', 'Agroecological', 'Agro-organic', 'Eco-cultivated', 'Greenhouse gas', 'carbon footprint', 'Earth-conscious', 'Soil-friendly', 'Eco-harmonious', 'Health', 'Whole foods', 'Farm-to-table', 'Pure', 'Unprocessed', 'Nutrient-rich', 'Balanced', 'Holistic', 'Green']
+    # Count the occurrences of each word
+    word_counts = Counter(bad_words)
+
+    # Get the words and counts sorted by count
+    sorted_word_counts = word_counts.most_common()
+
+    # Print the words and counts
+    print(sorted_word_counts)
 
 if __name__ == "__main__":
     
     #get_first_review_test()
     
-    keyword = "green"
     URLfile = "tripadvisorRestaurants.txt"
+    keyword_file = "keywords_organic.txt"
     
     # Reset the reviews.txt file
     with open("reviews.txt", "w") as f:
         pass
+
+    # Read the keywords from the file
+    with open(keyword_file, "r") as f:
+        keywords = [line.strip() for line in f]
 
     # Search the urls in the file tripadvisorRestaurants.txt
     with open(URLfile, "r") as f:
         urls = f.readlines()
 
     all_review_ids = []
+    bad_words = []
     for url in urls:
         url = url.strip()
         print(f"Scraping {url}")
-        review_ids = get_review_ids(get_page_reduced_with_keywords(url, keyword))
-        if review_ids is not None:
-            print(f"Found {len(review_ids)} review IDs.")
-            all_review_ids.extend(review_ids)
-        else:
-            print("No review IDs found.")
+        for keyword in keywords:
+            print(f"Searching for keyword: {keyword}")
+            review_ids = get_review_ids(get_page_reduced_with_keywords(url, keyword), all_review_ids)
+            if review_ids is not None:
+                print(f"Found {len(review_ids)} review IDs for keyword {keyword}.")
+                all_review_ids.extend(review_ids)
+                if len(review_ids) < 2:
+                    bad_words.append(keyword)
+            else:
+                print(f"No review IDs found for keyword {keyword}.")
 
     if all_review_ids:
         print(f"Extracting reviews for {len(all_review_ids)} IDs.")
@@ -147,4 +173,7 @@ if __name__ == "__main__":
                 f.write(review + "\n")
     else:
         print("No review IDs found.")
+    print("Bad words: ", bad_words)
     print("Done.")
+
+    #count_bad_words()

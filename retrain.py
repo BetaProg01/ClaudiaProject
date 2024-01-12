@@ -3,12 +3,9 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import BertForSequenceClassification, BertTokenizer, AdamW
 
 # Initialisation
-model_name = 'bert-base-uncased'  # Nom du modèle BERT à utiliser
-num_labels = 6  # Les notes vont de 0 à 5, donc nous avons 6 labels possibles
+model_name = 'nlptown/bert-base-multilingual-uncased-sentiment'  # Nom du modèle BERT à utiliser
 tokenizer = BertTokenizer.from_pretrained(model_name)  # Initialisation du tokenizer
-model = BertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)  # Initialisation du modèle
-
-
+model = BertForSequenceClassification.from_pretrained(model_name)  # Initialisation du modèle
 
 # read comments.txt file
 comments = []
@@ -20,11 +17,7 @@ with open('comments.txt', 'r') as f:
 scores = []
 with open('scores.txt', 'r') as f:
     for line in f:
-        scores.append(int(line.strip()))
-
-print("Nombre de commentaires:", len(comments))
-print("Nombre de notes:", len(scores))
-
+        scores.append(int(line.strip()) - 1)
 
 # Préparation des données
 class RestaurantReviewDataset(Dataset):

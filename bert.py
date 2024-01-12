@@ -1,6 +1,7 @@
 from transformers import BertTokenizer, BertForSequenceClassification
 from torch.nn.functional import softmax
 import torch
+from pprint import pprint
 
 
 def get_model():
@@ -55,22 +56,43 @@ with open(path, 'r') as fichier:
     for ligne in fichier.readlines():
       keywords.append(ligne)
 
-#input -> liste des commentaires a labeliser
-#subjects -> liste des sujets predefinis pour l'analyse de sentiments
-def general_labelization(input, subjects = [ 'Organic' , 'Climate' , 'Water' , 'Social' , 'Governance' , 'Waste' , 'Adverse'], keywords = keywords):
-  res = []
+
+
+# Fonction pour obtenir les notes d'un seul commentaire
+def general_labelization_single_review(review, subjects = [ 'Organic' , 'Climate' , 'Water' , 'Social' , 'Governance' , 'Waste' , 'Adverse'], keywords = keywords):
+  res = {}
   #pour chaque commentaire fait une analyse de sentiment pour chaque sujet
-  for commentaire in input:
-      res.append([])
-      for subject in subjects:
-          sentiment_label, probabilities = sentiment_analysis_over_subject(commentaire, subject, keywords)
-          res[-1].append(sentiment_label+1)
+  for subject in subjects:
+      sentiment_label, probabilities = sentiment_analysis_over_subject(review, subject, keywords)
+      res[subject] = sentiment_label+1
   return res
 
-path = 'reviews_organic.txt'
-inputs = []
-with open(path, 'r') as fichier:
-    for ligne in fichier.readlines():
-      inputs.append(ligne)
 
-print(general_labelization(inputs[:10],))
+
+## Fonction pour obtenir les notes de plusieurs commentaires
+#input -> liste des commentaires a labeliser
+#subjects -> liste des sujets predefinis pour l'analyse de sentiments
+def general_labelization_multiple_reviews(comments, subjects = [ 'Organic' , 'Climate' , 'Water' , 'Social' , 'Governance' , 'Waste' , 'Adverse'], keywords = keywords):
+  res = []
+  #pour chaque commentaire fait une analyse de sentiment pour chaque sujet
+  for comment in comments:
+      sc = general_labelization_single_review(comment, subjects, keywords)
+      res.append(sc)
+  return res
+
+
+
+
+def main():
+  path = 'reviews_organic.txt'
+  inputs = []
+  with open(path, 'r') as fichier:
+      for ligne in fichier.readlines():
+        inputs.append(ligne)
+
+  pprint(general_labelization_multiple_reviews(inputs[:10],))
+
+
+
+if __name__ == "__main__":
+    main()

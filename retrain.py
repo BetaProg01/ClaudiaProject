@@ -34,7 +34,7 @@ def main():
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')  # Utilise le GPU si disponible, sinon le CPU
     model.to(device)  # Déplace le modèle vers le périphérique choisi
 
-    for epoch in range(10):  # Boucle sur les époques (vous pouvez ajuster ce nombre)
+    for epoch in range(10):  # Boucle sur les époques
         for batch in dataloader:  # Boucle sur les lots de données
             input_ids = batch['input_ids'].to(device)  # Récupère les IDs d'entrée
             attention_mask = batch['attention_mask'].to(device)  # Récupère le masque d'attention

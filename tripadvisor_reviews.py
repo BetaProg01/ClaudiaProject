@@ -2,7 +2,11 @@ from collections import Counter
 import requests
 from bs4 import BeautifulSoup
 
-def get_page_reduced_with_keywords(url: str, keyword: str):
+keywordsPath = "./keywords/keywords_organic.txt"
+reviewsPath = "reviews/reviews_organic.txt"
+URLPath = "tripadvisorRestaurants.txt"
+
+def get_pages_with_keywords(url: str, keyword: str):
     headers = {
         "Host": "www.tripadvisor.com",
         "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
@@ -33,16 +37,43 @@ def get_page_reduced_with_keywords(url: str, keyword: str):
         "trating": "",
         "reqNum": "1",
         "isLastPoll": "false",
+        "paramSeqId": "1",
         "changeSet": "REVIEW_LIST",
         "puid": "7b3f2595-c29f-4ebb-88fc-324122094744"
     }
+    #session = requests.Session()
     try:
         response = requests.post(url, headers=headers, data=data, timeout=10)
         response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
-        return response.text
+        html = response.text
     except requests.exceptions.RequestException as e:
         print(f"Request error: {str(e)}")
         return None
+    
+    if not html:
+        return None
+    # Find if there are more than 15 reviews because it implies that there are more than one page
+    soup = BeautifulSoup(html, 'html.parser')
+    results_div = soup.find('div', class_='ui_header h4 counts')
+    if results_div:
+        num_results = int(results_div.text.split()[0])
+        if num_results > 15:
+            # Keep only the last five fields of the data dictionary
+            keys_to_keep = list(data.keys())[-5:]
+            new_data = {key: data[key] for key in keys_to_keep}
+
+            for i in range(num_results // 15):
+                # Modify the url for each request
+                offset = (i + 1) * 15
+                new_url = url.replace("Reviews", f"Reviews-or{offset}")
+                try:
+                    response = requests.post(new_url, headers=headers, data=new_data, timeout=10)
+                    response.raise_for_status()
+                    html += response.text
+                except requests.exceptions.RequestException as e:
+                    print(f"Request error: {str(e)}")
+                    continue
+    return html
     
 def get_review_ids(html, existing_ids):
     if not html:
@@ -59,6 +90,10 @@ def get_review_ids(html, existing_ids):
             review_ids.append(review_id)
     return review_ids
 
+def chunks(lst, n):
+    #Yield successive n-sized chunks from lst
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 def get_all_reviews_page(ids):
     url = "https://www.tripadvisor.com/OverlayWidgetAjax?Mode=EXPANDED_HOTEL_REVIEWS_RESP&metaReferer="
@@ -82,13 +117,15 @@ def get_all_reviews_page(ids):
         "Sec-Fetch-Site": "same-origin",
         "TE": "trailers"
     }
-    
-    data = {
-        "reviews": ",".join(ids)
-    }
-    response = requests.post(url, headers=headers, data=data)
-    
-    return response.text
+    global_response = ""
+    for id_chunk in chunks(ids, 1000):
+        data = {
+            "reviews": ",".join(id_chunk)
+        }
+        response = requests.post(url, headers=headers, data=data)
+        global_response += response.text
+
+    return global_response
 
 def extract_review_text(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -106,15 +143,14 @@ def extract_review_text(html):
             print(f'Missing review text: {element}')
     return reviews
 
-def get_first_review_test():
+def get_review_test():
     url = "https://www.tripadvisor.com/Restaurant_Review-g60763-d1878682-Reviews-Olio_e_Piu-New_York_City_New_York.html"
-    html = get_page_reduced_with_keywords(url, "water")
-    review_ids = get_review_ids(html)
+    html = get_pages_with_keywords(url, "pizza")
+    review_ids = get_review_ids(html, [])
     print(f"Ids : {review_ids}")
     full_reviews = get_all_reviews_page(review_ids)
-    print(f"HTML : {full_reviews}")
     reviews = extract_review_text(full_reviews)
-    print(reviews[0])
+    print(reviews[16])
     
 def count_bad_words():
     
@@ -130,13 +166,14 @@ def count_bad_words():
 
 if __name__ == "__main__":
     
-    #get_first_review_test()
+    # get_review_test()
     
-    URLfile = "tripadvisorRestaurants.txt"
-    keyword_file = "keywords_organic.txt"
+    URLfile = URLPath
+    keyword_file = keywordsPath
+    reviews_file = reviewsPath
     
     # Reset the reviews.txt file
-    with open("reviews.txt", "w") as f:
+    with open(reviews_file, "w") as f:
         pass
 
     # Read the keywords from the file
@@ -154,7 +191,7 @@ if __name__ == "__main__":
         print(f"Scraping {url}")
         for keyword in keywords:
             print(f"Searching for keyword: {keyword}")
-            review_ids = get_review_ids(get_page_reduced_with_keywords(url, keyword), all_review_ids)
+            review_ids = get_review_ids(get_pages_with_keywords(url, keyword), all_review_ids)
             if review_ids is not None:
                 print(f"Found {len(review_ids)} review IDs for keyword {keyword}.")
                 all_review_ids.extend(review_ids)
@@ -163,17 +200,21 @@ if __name__ == "__main__":
             else:
                 print(f"No review IDs found for keyword {keyword}.")
 
-    if all_review_ids:
-        print(f"Extracting reviews for {len(all_review_ids)} IDs.")
-        full_reviews = get_all_reviews_page(all_review_ids)
-        reviews = extract_review_text(full_reviews)
-        # Append the reviews to the file reviews.txt
-        with open("reviews.txt", "a") as f:
-            for review in reviews:
-                f.write(review + "\n")
-    else:
-        print("No review IDs found.")
-    print("Bad words: ", bad_words)
-    print("Done.")
+    try:
+        if all_review_ids:
+            print(f"Extracting reviews for {len(all_review_ids)} IDs.")
+            full_reviews = get_all_reviews_page(all_review_ids)
+            reviews = extract_review_text(full_reviews)
+            # Append the reviews to the file reviews.txt
+            with open(reviews_file, "a") as f:
+                for review in reviews:
+                    f.write(review + "\n")
+        else:
+            print("No review IDs found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Review IDs: ", all_review_ids)
+    finally:
+        print("Done.")
 
     #count_bad_words()
